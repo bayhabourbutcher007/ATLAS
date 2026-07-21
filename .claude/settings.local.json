@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm test *)",
+      "Bash(node -c src/models/AcademicProgress.js)",
+      "Bash(node -c src/controllers/academicProgressController.js)",
+      "Bash(node -c src/middleware/academicProgressValidation.js)",
+      "Bash(node -c src/routes/academicProgress.js)",
+      "Bash(node *)",
+      "Bash(npm list *)",
+      "Bash(dir *)",
+      "Bash(git add *)"
+    ]
+  }
+}
