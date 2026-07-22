@@ -42,15 +42,15 @@ class TimeService {
     }
 
     /**
-     * Update time zones for a user
+     * Update time document for a user
      * @param {string} userId - User ID
-     * @param {Object} timeZonesData - { home: String, work: String } (partial updates allowed)
+     * @param {Object} updates - Data to update (e.g., { timeZones: { home: 'America/New_York' } })
      * @returns {Promise<Object>} Updated time document
      */
-    async updateTimeZones(userId, timeZonesData) {
+    async updateTime(userId, updates) {
         const timeDoc = await Time.findOneAndUpdate(
             { userId },
-            { $set: { ...timeZonesData, updatedAt: new Date() } },
+            { $set: { ...updates, updatedAt: new Date() } },
             { new: true, runValidators: true, upsert: true }
         );
 

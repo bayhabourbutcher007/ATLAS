@@ -28,7 +28,8 @@ router.get('/', (req, res) => {
             finance: '/finance',
             skills: '/skills',
             health: '/health',
-            career: '/career' // Career tracking endpoints
+            career: '/career',
+            time: '/time' // Time tracking endpoints
         }
     });
 });
@@ -53,6 +54,9 @@ router.use('/health', require('../routes/health'));
 
 // Career routes
 router.use('/career', require('../routes/career'));
+
+// Time routes
+router.use('/time', require('../routes/time'));
 
 // Notebook routes
 router.use('/notebook', require('./notebook'));
