@@ -12,7 +12,8 @@
       "Bash(dir *)",
       "Bash(git add *)",
       "Bash(npx jest *)",
-      "Bash(timeout 2 npm start)"
+      "Bash(timeout 2 npm start)",
+      "Bash(git tag *)"
     ]
   }
 }
