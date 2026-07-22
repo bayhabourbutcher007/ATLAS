@@ -5,6 +5,7 @@ const FinanceService = require('../../services/financeService');
 const SkillService = require('../../services/skillService');
 const HealthService = require('../../services/HealthService');
 const CareerService = require('../../services/CareerService');
+const TimeService = require('../../services/TimeService');
 
 /**
  * ContextAggregator - builds a holistic view of the user's life by pulling data from domain services.
@@ -141,11 +142,18 @@ class ContextAggregator {
       };
     }
 
-    const timeDto = {
-      calendar: [],
-      timeZones: { home: null, work: null },
-      availability: { slots: [] }
-    };
+    // ----- Time DTO (from TimeService) -----
+    let timeDto;
+    try {
+      timeDto = await TimeService.getTimeSnapshot(userId);
+    } catch (error) {
+      // If there's an error fetching time data, return empty time DTO
+      timeDto = {
+        calendar: [],
+        timeZones: { home: null, work: null },
+        availability: { slots: [] }
+      };
+    }
 
     const emotionalStateDto = {
       timestamp: new Date().toISOString(),
