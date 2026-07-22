@@ -76,7 +76,7 @@ const availabilitySlotSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['focus', 'meeting', 'break', 'person'],
+        enum: ['focus', 'meeting', 'break', 'personal'],
         required: true
     }
 }, { _id: true }); // Now we give it an _id
@@ -143,8 +143,8 @@ timeSchema.methods.toDTO = function() {
         availability: {
             slots: (obj.availability?.slots || []).map(slot => ({
                 id: slot._id.toString(),
-                start: slot.start ? new Date(start).toISOString() : null,
-                end: slot.end ? new Date(end).toISOString() : null,
+                start: slot.start ? new Date(slot.start).toISOString() : null,
+                end: slot.end ? new Date(slot.end).toISOString() : null,
                 type: slot.type
             }))
         }
