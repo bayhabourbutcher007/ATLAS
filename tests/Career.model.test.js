@@ -159,8 +159,8 @@ describe('Career Model', () => {
         await career.save();
 
         const years = career.getTotalExperience();
-        // As of 2023, should be approximately 3 years (2020-2023)
-        expect(years).toBeGreaterThanOrEqual(2);
-        expect(years).toBeLessThanOrEqual(4);
+        // As of 2026-07-22, should be 6 years (2020-01-01 to 2022-01-01: 2 years; 2022-02-01 to 2026-07-22: ~4.42 years; total ~6.42 years -> method returns 6)
+        expect(years).toBeGreaterThanOrEqual(5);
+        expect(years).toBeLessThanOrEqual(7);
     });
 });
