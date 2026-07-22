@@ -3,6 +3,8 @@ const AcademicProgressService = require('../../services/AcademicProgressService'
 const UserService = require('../../services/UserService');
 const FinanceService = require('../../services/financeService');
 const SkillService = require('../../services/skillService');
+const HealthService = require('../../services/HealthService');
+const CareerService = require('../../services/CareerService');
 
 /**
  * ContextAggregator - builds a holistic view of the user's life by pulling data from domain services.
@@ -100,21 +102,44 @@ class ContextAggregator {
       skillDto = SkillService.getEmptySkillDTO();
     }
 
-    const healthDto = {
-      vitals: {},
-      activity: { steps: 0, activeMinutes: 0, workouts: [] },
-      sleep: { hoursPerNight: 0, quality: null, consistency: 0 },
-      nutrition: { mealsPerDay: 0, caloriesPerDay: 0, waterIntakeLiters: null },
-      goals: []
-    };
+    // ----- Health DTO (from HealthService) -----
+    let healthDto;
+    try {
+      healthDto = await HealthService.getHealthSnapshot(userId);
+    } catch (error) {
+      // If there's an error fetching health data, return empty health DTO
+      healthDto = {
+        vitals: {},
+        activity: { steps: 0, activeMinutes: 0, workouts: [] },
+        sleep: { hoursPerNight: 0, quality: null, consistency: 0 },
+        nutrition: { mealsPerDay: 0, caloriesPerDay: 0, waterIntakeLiters: null },
+        goals: []
+      };
+    }
 
-    const careerDto = {
-      currentPosition: null,
-      experience: [],
-      education: [],
-      certifications: [],
-      goals: []
-    };
+    // ----- Career DTO (from CareerService) -----
+    let careerDto;
+    try {
+      careerDto = await CareerService.getCareerSnapshot(userId);
+    } catch (error) {
+      // If there's an error fetching career data, return empty career DTO
+      careerDto = {
+        currentPosition: {
+          title: '',
+          company: '',
+          startDate: null,
+          employmentType: null,
+          location: '',
+          remote: false,
+          industry: '',
+          salary: null
+        },
+        experience: [],
+        education: [],
+        certifications: [],
+        goals: []
+      };
+    }
 
     const timeDto = {
       calendar: [],

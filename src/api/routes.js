@@ -1,5 +1,5 @@
 // Health check endpoint
-router.get('/health', (req, res) => {
+router.get('/status', (req, res) => {
     res.status(200).json({
         status: 'OK',
         timestamp: new Date().toISOString(),
@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
         version: req.apiVersion,
         documentation: '/api/docs',
         endpoints: {
-            health: '/health',
+            status: '/status',
             auth: '/auth',
             users: '/users',
             academicProgress: '/academic-progress',
@@ -26,7 +26,9 @@ router.get('/', (req, res) => {
             progress: '/progress',
             collab: '/collab',
             finance: '/finance',
-            skills: '/skills'
+            skills: '/skills',
+            health: '/health',
+            career: '/career' // Career tracking endpoints
         }
     });
 });
@@ -45,6 +47,12 @@ router.use('/finance', require('../routes/finance'));
 
 // Skills routes
 router.use('/skills', require('../routes/skill'));
+
+// Health routes
+router.use('/health', require('../routes/health'));
+
+// Career routes
+router.use('/career', require('../routes/career'));
 
 // Notebook routes
 router.use('/notebook', require('./notebook'));
