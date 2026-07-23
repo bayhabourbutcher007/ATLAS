@@ -6,6 +6,7 @@ const SkillService = require('../../services/skillService');
 const HealthService = require('../../services/HealthService');
 const CareerService = require('../../services/CareerService');
 const TimeService = require('../../services/TimeService');
+const EmotionalStateService = require('../../services/EmotionalStateService');
 
 /**
  * ContextAggregator - builds a holistic view of the user's life by pulling data from domain services.
@@ -155,15 +156,22 @@ class ContextAggregator {
       };
     }
 
-    const emotionalStateDto = {
-      timestamp: new Date().toISOString(),
-      mood: { value: 0, label: 'neutral' },
-      stress: 0,
-      energy: 0,
-      focus: 0,
-      notes: '',
-      tags: []
-    };
+    // ----- EmotionalState DTO (from EmotionalStateService) -----
+    let emotionalStateDto;
+    try {
+      emotionalStateDto = await EmotionalStateService.getEmotionalStateSnapshot(userId);
+    } catch (error) {
+      // If there's an error fetching emotional state data, return empty emotional state DTO
+      emotionalStateDto = {
+        timestamp: new Date().toISOString(),
+        mood: { value: 0, label: 'neutral' },
+        stress: 0,
+        energy: 0,
+        focus: 0,
+        notes: '',
+        tags: []
+      };
+    }
 
     const metadata = {
       generatedAt: new Date().toISOString(),

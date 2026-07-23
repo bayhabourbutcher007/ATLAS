@@ -14,7 +14,17 @@
       "Bash(npx jest *)",
       "Bash(timeout 2 npm start)",
       "Bash(git tag *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(awk *)",
+      "Bash(grep *)",
+      "Bash(echo \"\")",
+      "Bash(echo \"    /**\")",
+      "Bash(echo \"     * Update time zones for a user\")",
+      "Bash(echo \"     * @param {string} userId - User ID\")",
+      "Bash(echo \"     * @param {Object} timeZonesData - { home: String, work: String } \\(partial updates allowed\\)\")",
+      "Bash(git checkout *)",
+      "Bash(git restore *)",
+      "Bash(git push *)"
     ]
   }
 }

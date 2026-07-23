@@ -29,7 +29,8 @@ router.get('/', (req, res) => {
             skills: '/skills',
             health: '/health',
             career: '/career',
-            time: '/time' // Time tracking endpoints
+            time: '/time', // Time tracking endpoints
+            emotionalState: '/emotional-state' // Emotional state endpoints
         }
     });
 });
@@ -57,6 +58,9 @@ router.use('/career', require('../routes/career'));
 
 // Time routes
 router.use('/time', require('../routes/time'));
+
+// Emotional State routes
+router.use('/emotional-state', require('../routes/emotionalState'));
 
 // Notebook routes
 router.use('/notebook', require('./notebook'));
