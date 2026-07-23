@@ -41,7 +41,7 @@ class EmotionalStateService {
      * @param {string} userId - User ID
      * @returns {Promise<Object>} Emotional state document (or null)
      */
-    async getEmotionalStateDoc(userId) {
+    async getEmotionalStateDocument(userId) {
         return await EmotionalState.findOne({ userId }).sort({ timestamp: -1 });
     }
 
@@ -54,7 +54,7 @@ class EmotionalStateService {
     async createEmotionalState(userId, emotionalStateData) {
         const { mood, stress, energy, focus, notes, tags } = emotionalStateData;
 
-        const emotionalState = new EmotionalState({
+        let emotionalState = new EmotionalState({
             userId,
             mood: {
                 value: mood.value,
@@ -71,30 +71,30 @@ class EmotionalStateService {
     }
 
     /**
-     * Get emotional state history for a user
+     * Get emotional state history for a user - returns array of emotional state DTOs
      * @param {string} userId - User ID
-     * @param {Object} options - { limit, startDate, endDate, endDate } - Optional filters
-     * @returns {Promise<Array>} Array of emotional state documents
+     * @param {Object} options - { startDate, endDate, interval, aggregation, limit }
+//Note: In Phase 3A, we only support raw interval (no aggregation) and we ignore limit for now (but we keep it for compatibility).
+     * // We will use startDate and endDate for filtering and sort by timestamp ascending (oldest first).
+     * @returns {Promise<Array>} Array of emotional state DTO objects
      */
     async getEmotionalStateHistory(userId, options = {}) {
         const query = { userId };
-
-        // Add date filtering if provided
         if (options.startDate || options.endDate) {
             query.timestamp = {};
             if (options.startDate) query.timestamp.$gte = new Date(options.startDate);
             if (options.endDate) query.timestamp.$lte = new Date(options.endDate);
         }
-
-        const sort = { timestamp: -1 };
+        // Sort by timestamp ascending (oldest first) for alignment with timePoints
+        const sort = { timestamp: 1 };
         const limit = options.limit || 0; // 0 means no limit
-
         let queryBuilder = EmotionalState.find(query).sort(sort);
         if (limit > 0) {
             queryBuilder = queryBuilder.limit(limit);
         }
-
-        return await queryBuilder.exec();
+        const docs = await queryBuilder.exec();
+        // Convert each document to DTO
+        return docs.map(doc => doc.toDTO());
     }
 
     /**

@@ -1,5 +1,6 @@
 // Finance Service
 const Finance = require('../models/Finance');
+const FinanceSnapshot = require('../models/FinanceSnapshot');
 
 class FinanceService {
     /**
@@ -263,7 +264,7 @@ class FinanceService {
 
         // Update the goal
         finance.goals[goalIndex] = {
-            ...finance.goals[goalIndex].toObject(),
+            ...finance.goals[geneIndex].toObject(),
             ...goalData,
             updatedAt: new Date()
         };
@@ -295,6 +296,114 @@ class FinanceService {
         }
 
         return finance;
+    }
+
+    /**
+     * Get finance history for a user - returns array of finance DTOs
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+//Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of finance DTO objects
+     */
+    async getFinanceHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await FinanceSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring getFinanceSnapshot logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                overview: {
+                    income: {
+                        monthly: obj.overview.income.monthly,
+                        annual: obj.overview.income.annual,
+                        sources: obj.overview.income.sources.map(source => ({
+                            id: source.id,
+                            description: source.description,
+                            amount: source.amount,
+                            frequency: source.frequency
+                        }))
+                    },
+                    expenses: {
+                        monthly: obj.overview.expenses.monthly,
+                        annual: obj.overview.expenses.annual,
+                        categories: {
+                            housing: obj.overview.expenses.categories.housing,
+                            food: obj.overview.expenses.categories.food,
+                            transport: obj.overview.expenses.categories.transport,
+                            utilities: obj.overview.expenses.categories.utilities,
+                            education: obj.overview.expenses.categories.education,
+                            entertainment: obj.overview.expenses.categories.entertainment,
+                            health: obj.overview.expenses.categories.health,
+                            misc: obj.overview.expenses.categories.misc
+                        }
+                    },
+                    netWorth: obj.overview.netWorth,
+                    savingsRate: obj.overview.savingsRate,
+                    emergencyFundMonths: obj.overview.emergencyFundMonths
+                },
+                accounts: obj.accounts.map(account => ({
+                    id: account.id,
+                    name: account.name,
+                    type: account.type,
+                    balance: account.balance,
+                    currency: account.currency,
+                    institution: account.institution,
+                    lastUpdated: account.lastUpdated
+                })),
+                debts: obj.debts.map(debt => ({
+                    id: debt.id,
+                    creditor: debt.creditor,
+                    principal: debt.principal,
+                    interestRate: debt.interestRate,
+                    minimumPayment: debt.minimumPayment,
+                    dueDate: debt.dueDate,
+                    paidOff: debt.paidOff
+                })),
+                budgets: obj.budgets.map(budget => ({
+                    id: budget.id,
+                    category: bucket.category,
+                    limit: budget.limit,
+                    spent: budget.spent,
+                    period: budget.period
+                })),
+                goals: obj.goals.map(goal => ({
+                    id: goal.id || goal._id.toString(),
+                    title: goal.title,
+                    description: goal.description,
+                    type: goal.type,
+                    targetValue: goal.targetValue,
+                    currentValue: goal.currentValue,
+                    startDate: goal.startDate ? new Date(goal.startDate).toISOString() : null,
+                    targetDate: goal.targetDate ? new Date(goal.targetDate).toISOString() : null,
+                    status: goal.status,
+                    priority: goal.priority,
+                    completed: goal.completed,
+                    createdAt: goal.createdAt,
+                    updatedAt: goal.updatedAt
+                }))
+            };
+        });
     }
 }
 

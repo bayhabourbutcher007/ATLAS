@@ -1,6 +1,7 @@
 // Skill Service
 const Skill = require('../models/Skill');
 const { ObjectId } = require('mongoose').Types;
+const SkillSnapshot = require('../models/SkillSnapshot');
 
 class SkillService {
     /**
@@ -83,7 +84,7 @@ class SkillService {
      * @returns {Promise<Object>} Skill subdocument or null
      */
     async getSkillById(userId, skillId) {
-        const skillDoc = await this.getSkillDoc(userId);
+        const skillDoc = await Skill.findOne({ userId });
         if (!skillDoc) return null;
         const skill = skillDoc.skills.find(s => s._id.toString() === skillId);
         return skill || null;
@@ -193,7 +194,7 @@ class SkillService {
      * @param {string} userId - User ID
      * @param {string} skillId - Skill ID
      * @param {Object} evidenceData - { type, description, date, url? }
-     * @returns {Promise<Object>} Updated skill DTO}
+     * @returns {Promise<Object>} Updated skill DTO
      */
     async addEvidence(userId, skillId, evidenceData) {
         const { type, description, date, url } = evidenceData;
@@ -224,7 +225,7 @@ class SkillService {
      * @param {string} userId - User ID
      * @param {string} skillId - Skill ID
      * @param {string} evidenceId - Evidence ID (as string)
-     * @returns {Promise<Object> DTO}
+     * @returns {Promise<Object>} Updated skill DTO
      */
     async removeEvidence(userId, skillId, evidenceId) {
         const skillDoc = await Skill.findOne({ userId });
@@ -368,6 +369,70 @@ class SkillService {
         );
 
         return this.getSkillSnapshot(userId);
+    }
+
+    /**
+     * Get skill history for a user - returns array of skill DTOs
+     * @param {string} userId - User ID
+   * @param {Object} options - { startDate, endDate, interval, aggregation }
+//Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of skill DTO objects
+     */
+    async getSkillHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await SkillSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring getSkillSnapshot logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                skills: (obj.skills || []).map(skill => ({
+                    id: skill._id?.toString() ?? '',
+                    name: skill.name ?? '',
+                    category: skill.category ?? '',
+                    proficiency: skill.proficiency ?? 0,
+                    evidence: (skill.evidence || []).map(ev => ({
+                        type: ev.type ?? '',
+                        description: ev.description ?? '',
+                        date: ev.date ? new Date(ev.date).toISOString() : null,
+                        url: ev.url ?? ''
+                    })),
+                    lastPracticed: skill.lastPracticed ? new Date(skill.lastPracticed).toISOString() : null,
+                    goalLevel: skill.goalLevel !== null && skill.goalLevel !== undefined ? skill.goalLevel : null
+                })),
+                learningHours: {
+                    total: obj.learningHours?.total ?? 0,
+                    weekly: obj.learningHours?.weekly ?? 0,
+                    bySkill: (obj.learningHours?.bySkill || []).map(bs => ({
+                        skillId: bs.skillId ?? '',
+                        minutes: bs.minutes ?? 0
+                    })),
+                    lastUpdated: obj.learningHours?.lastUpdated
+                        ? new Date(obj.learningHours.lastUpdated).toISOString()
+                        : null
+                }
+            };
+        });
     }
 }
 

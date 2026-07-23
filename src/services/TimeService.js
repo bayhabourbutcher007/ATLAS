@@ -1,6 +1,7 @@
 // Time Service
 const Time = require('../models/Time');
 const { ObjectId } = require('mongoose').Types;
+const TimeSnapshot = require('../models/TimeSnapshot');
 
 class TimeService {
     /**
@@ -48,7 +49,7 @@ class TimeService {
      * @returns {Promise<Object>} Updated time document
      */
     async updateTime(userId, updates) {
-        const timeDoc = await Time.findOneAndUpdate(
+        let timeDoc = await Time.findOneAndUpdate(
             { userId },
             { $set: { ...updates, updatedAt: new Date() } },
             { new: true, runValidators: true, upsert: true }
@@ -63,14 +64,14 @@ class TimeService {
 
     /**
      * Add a calendar event for a user
-     * @param {string} userId - User ID
+     * =   {string} userId - User ID
      * @param {Object} eventData - { title, description, start, end, allDay, location, attendees, recurrence, category }
      * @returns {Promise<Object>} Updated time document
      */
     async addCalendarEvent(userId, eventData) {
         const { title, description, start, end, allDay, location, attendees, recurrence, category } = eventData;
 
-        const timeDoc = await Time.findOneAndUpdate(
+        let timeDoc = await Time.findOneAndUpdate(
             { userId },
             {
                 $push: {
@@ -78,7 +79,7 @@ class TimeService {
                         title,
                         description: description ?? '',
                         start: new Date(start),
-                        end: new Date(end),
+ end: new Date(end),
                         allDay: allDay ?? false,
                         location: location ?? '',
                         attendees: attendees || [],
@@ -102,11 +103,12 @@ class TimeService {
      * Update a calendar event for a user
      * @param {string} userId - User ID
      * @param {string} eventId - Event ID to update
+     * =   {string} userId - User ID
      * @param {Object} eventData - Updated event data
      * @returns {Promise<Object>} Updated time document
      */
     async updateCalendarEvent(userId, eventId, eventData) {
-        const timeDoc = await Time.findOne({ userId });
+        let timeDoc = await Time.findOne({ userId });
         if (!timeDoc) {
             throw new Error('Time document not found');
         }
@@ -145,11 +147,12 @@ class TimeService {
     /**
      * Remove a calendar event from a user
      * @param {string} userId - User ID
+     * =   {string} userId - User ID
      * @param {string} eventId - Event ID to remove
      * @returns {Promise<Object>} Updated time document
      */
     async removeCalendarEvent(userId, eventId) {
-        const timeDoc = await Time.findOneAndUpdate(
+        let timeDoc = await Time.findOneAndUpdate(
             { userId },
             {
                 $pull: { calendar: { _id: new ObjectId(eventId) } },
@@ -168,13 +171,14 @@ class TimeService {
     /**
      * Add an availability slot for a user
      * @param {string} userId - User ID
+     * =   {string} userId - User ID
      * @param {Object} slotData - { start, end, type }
      * @returns {Promise<Object>} Updated time document
      */
     async addAvailabilitySlot(userId, slotData) {
         const { start, end, type } = slotData;
 
-        const timeDoc = await Time.findOneAndUpdate(
+        let timeDoc = await Time.findOneAndUpdate(
             { userId },
             {
                 $push: { 'availability.slots': { start: new Date(start), end: new Date(end), type } },
@@ -192,13 +196,13 @@ class TimeService {
 
     /**
      * Update an availability slot for a user
-     * @param {string} userId - User ID
+     * @param {string}userId - User ID
      * @param {string} slotId - Slot ID to update
      * @param {Object} slotData - Updated slot data { start, end, type }
      * @returns {Promise<Object>} Updated time document
      */
     async updateAvailabilitySlot(userId, slotId, slotData) {
-        const timeDoc = await Time.findOne({ userId });
+        let timeDoc = await Time.findOne({ userId });
         if (!timeDoc) {
             throw new Error('Time document not found');
         }
@@ -230,12 +234,12 @@ class TimeService {
 
     /**
      * Remove an availability slot from a user
-     * @param {string} userId - User ID
+     * =   {string} userId - User ID
      * @param {string} slotId - Slot ID to remove
      * @returns {Promise<Object>} Updated time document
      */
     async removeAvailabilitySlot(userId, slotId) {
-        const timeDoc = await Time.findOneAndUpdate(
+        let timeDoc = await Time.findOneAndUpdate(
             { userId },
             {
                 $pull: { 'availability.slots': { _id: new ObjectId(slotId) } },
@@ -249,6 +253,74 @@ class TimeService {
         }
 
         return timeDoc;
+    }
+
+    /**
+     * Get time history for a user - returns array of time DTOs
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+//Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of time DTO objects
+     */
+    async getTimeHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await TimeSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring Time.toDTO logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                calendar: (obj.calendar || []).map(event => ({
+                    id: event._id.toString(),
+                    title: event.title,
+                    description: event.description,
+                    start: event.start ? new Date(event.start).toISOString() : null,
+                    end: event.end ? new Date(event.end).toISOString() : null,
+                    allDay: event.allDay,
+                    location: event.location,
+                    attendees: event.attendees,
+                    recurrence: event.recurrence ? {
+                        frequency: event.recurrence.frequency,
+                        interval: event.recurrence.interval,
+                        until: event.recurrence.until ? new Date(event.recurrence.until).toISOString() : null,
+                        byday: event.recurrence.byday || []
+                    } : null,
+                    category: event.category
+                })),
+                timeZones: {
+                    home: obj.timeZones?.home ?? null,
+                    work: obj.timeZones?.work ?? null
+                },
+                availability: {
+                    slots: (obj.availability?.slots || []).map(slot => ({
+                        id: slot._id.toString(),
+                        start: slot.start ? new Date(slot.start).toISOString() : null,
+                        end: slot.end ? new Date(slot.end).toISOString() : null,
+                        type: slot.type
+                    }))
+                }
+            };
+        });
     }
 }
 

@@ -1,6 +1,7 @@
 // User service
 const User = require('../models/User');
 const { ValidationError, NotFoundError, ConflictError } = require('../utils/errors');
+const UserSnapshot = require('../models/UserSnapshot');
 
 class UserService {
     /**
@@ -178,6 +179,37 @@ class UserService {
             throw new Error('Failed to delete user');
         }
     }
+
+    /**
+     * Get user history for a user - returns array of user documents (matching getUserById shape)
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+     * @returns {Promise<Array>} Array of user documents (with password and __v removed)
+     */
+    async getUserHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        return await UserSnapshot.find(query).sort({ timestamp: 1 }).select('-__v');
+    }
 }
 
-module.exports = UserService;
+module.exports = new UserService();

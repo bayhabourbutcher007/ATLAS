@@ -1,6 +1,7 @@
 // Health Service
 const Health = require('../models/Health');
 const { ObjectId } = require('mongoose').Types;
+const HealthSnapshot = require('../models/HealthSnapshot');
 
 class HealthService {
     /**
@@ -19,7 +20,7 @@ class HealthService {
         // Convert to plain object
         const obj = healthDoc.toObject();
 
-        // Transform to match the exact DTO structure from CONTEXT_SCHEMA.md
+        // Transform to match the exact DTO structure from CONTACT_SCHEMA.md
         const dto = {
             vitals: {
                 weight: obj.vitals?.weight ?? null,
@@ -117,7 +118,7 @@ class HealthService {
             calculatedBMI = weight / (heightInMeters * heightInMeters);
         }
 
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $set: {
@@ -149,7 +150,7 @@ class HealthService {
     async updateActivity(userId, activityData) {
         const { steps, activeMinutes, workouts } = activityData;
 
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $set: {
@@ -178,10 +179,10 @@ class HealthService {
     async addWorkout(userId, workoutData) {
         const { type, durationMinutes, date, caloriesBurned } = workoutData;
 
-        const healthDoc = await Health.findOne({ userId });
+        let healthDoc = await Health.findOne({ userId });
         if (!healthDoc) {
             // Create new health document if none exists
-            const newHealth = new Health({
+            let newHealth = new Health({
                 userId,
                 activity: {
                     workouts: [{
@@ -210,20 +211,20 @@ class HealthService {
 
     /**
      * Update sleep data for a user
-     * @param {string} userId - User ID
+     * @param {string} userId - userId - User ID
      * @param {Object} sleepData - { hoursPerNight, quality, consistency }
      * @returns {Promise<Object>} Updated health DTO
      */
     async updateSleep(userId, sleepData) {
         const { hoursPerNight, quality, consistency } = sleepData;
 
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $set: {
                     'sleep.hoursPerNight': hoursPerNight,
                     'sleep.quality': quality,
-                    'sleep.consistency': consistency,
+                    'sleep.consistency': consistency ,
                     'updatedAt': new Date()
                 }
             },
@@ -246,7 +247,7 @@ class HealthService {
     async updateNutrition(userId, nutritionData) {
         const { mealsPerDay, caloriesPerDay, waterIntakeLiters } = nutritionData;
 
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $set: {
@@ -273,7 +274,7 @@ class HealthService {
      * @returns {Promise<Object>} Updated health DTO
      */
     async addGoal(userId, goalId) {
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $addToSet: { goals: goalId }, // Add to set to avoid duplicates
@@ -296,7 +297,7 @@ class HealthService {
      * @returns {Promise<Object>} Updated health DTO
      */
     async removeGoal(userId, goalId) {
-        const healthDoc = await Health.findOneAndUpdate(
+        let healthDoc = await Health.findOneAndUpdate(
             { userId },
             {
                 $pull: { goals: goalId },
@@ -310,6 +311,76 @@ class HealthService {
         }
 
         return this.getHealthSnapshot(userId);
+    }
+
+    /**
+     * Get health history for a user - returns array of health DTOs
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+//Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of health DTO objects
+     */
+    async getHealthHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await HealthSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring getHealthSnapshot logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                vitals: {
+                    weight: obj.vitals?.weight ?? null,
+                    height: obj.vitals?.height ?? null,
+                    bmi: obj.vitals?.bmi ?? null,
+                    bloodPressure: {
+                        systolic: obj.vitals?.bloodPressure?.systolic ?? null,
+                        diastolic: obj.vitals?.bloodPressure?.diastolic ?? null
+                    },
+                    restingHeartRate: obj.vitals?.restingHeartRate ?? null
+                },
+                activity: {
+                    steps: obj.activity?.steps ?? 0,
+                    activeMinutes: obj.activity?.activeMinutes ?? 0,
+                    workouts: (obj.activity?.workouts || []).map(workout => ({
+                        type: workout.type ?? '',
+                        durationMinutes: workout.durationMinutes ?? 0,
+                        date: workout.date ? new Date(workout.date).toISOString() : null,
+                        caloriesBurned: workout.caloriesBurned ?? null
+                    }))
+                },
+                sleep: {
+                    hoursPerNight: obj.sleep?.hoursPerNight ?? 0,
+                    quality: obj.sleep?.quality ?? null,
+                    consistency: obj.sleep?.consistency ?? 0
+                },
+                nutrition: {
+                    mealsPerDay: obj.nutrition?.mealsPerDay ?? 0,
+                    caloriesPerDay: obj.nutrition?.caloriesPerDay ?? 0,
+                    waterIntakeLiters: obj.nutrition?.waterIntakeLiters ?? null
+                },
+                goals: [] // Goals are referenced but would need to be populated from Goal model - for now return empty array
+            };
+        });
     }
 }
 

@@ -1,5 +1,6 @@
 // Career Service
 const Career = require('../models/Career');
+const CareerSnapshot = require('../models/CareerSnapshot');
 
 class CareerService {
     /**
@@ -35,7 +36,7 @@ class CareerService {
         // Convert to plain object and return DTO
         const careerObj = career.toObject();
 
-        // Transform to match the exact DTO structure from CONTEXT_SCHEMA.md
+        // Transform to match the exact DTO structure from CONTACT_SCHEMA.md
         const dto = {
             currentPosition: {
                 title: careerObj.currentPosition?.title ?? '',
@@ -75,7 +76,7 @@ class CareerService {
                 issuer: cert.issuer ?? '',
                 date: cert.date ? new Date(cert.date).toISOString() : null,
                 expiryDate: cert.expiryDate ? new Date(cert.expiryDate).toISOString() : null,
-                credentialId: cert.credentialId ?? ''
+                credentialId: cred.credentialId ?? ''
             })),
             goals: (careerObj.goals || []).map(goal => ({
                 id: goal._id?.toString() ?? '',
@@ -213,7 +214,7 @@ class CareerService {
         const career = await Career.findOneAndUpdate(
             { userId },
             {
-                $pull: { experience: { _id: experienceId } },
+                $pull: { experience: { _id: new ObjectId(experienceId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -294,7 +295,7 @@ class CareerService {
         const career = await Career.findOneAndUpdate(
             { userId },
             {
-                $pull: { education: { _id: educationId } },
+                $pull: { education: { _id: new ObjectId(educationId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -375,7 +376,7 @@ class CareerService {
         const career = await Career.findOneAndUpdate(
             { userId },
             {
-                $pull: { certifications: { _id: certificationId } },
+                $pull: { certifications: { _id: new ObjectId(certificationId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -456,7 +457,7 @@ class CareerService {
         const career = await Career.findOneAndUpdate(
             { userId },
             {
-                $pull: { goals: { _id: goalId } },
+                $pull: { goals: { _id: new ObjectId(goalId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -467,6 +468,65 @@ class CareerService {
         }
 
         return career;
+    }
+
+    /**
+     * Get career history for a user - returns array of career DTOs
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+// Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of career DTO objects
+     */
+    async getCareerHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await CareerSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring getCareerSnapshot logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                currentPosition: {
+                    title: obj.currentPosition?.title ?? '',
+                    company: obj.currentPosition?.company ?? '',
+                    startDate: obj.currentPosition?.startDate
+                        ? new Date(obj.currentPosition.startDate).toISOString()
+                        : null,
+                    employmentType: obj.currentPosition?.employmentType ?? null,
+                    location: obj.currentPosition?.location ?? '',
+                    remote: obj.currentPosition?.remote ?? false,
+                    industry: obj.currentPosition?.industry ?? '',
+                    salary: obj.currentPosition?.salary ? {
+                        amount: obj.currentPosition.salary.amount ?? 0,
+                        currency: obj.currentPosition.salary.currency ?? 'USD',
+                        frequency: obj.currentPosition.salary.frequency ?? null
+                    } : null
+                },
+                experience: obj.experience || [], // already a count
+                education: obj.education || [], // already a count
+                certifications: obj.certifications || [], // already a count
+                goals: obj.goals || [] // already a count
+            };
+        });
     }
 }
 

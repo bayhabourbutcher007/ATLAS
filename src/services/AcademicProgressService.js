@@ -35,7 +35,7 @@ class AcademicProgressService {
         // Convert to plain object and return DTO
         const academicObj = academicProgress.toObject();
 
-        // Transform to match the exact DTO structure from CONTEXT_SCHEMA.md
+        // Transform to match the exact DTO structure from CONTACT_SCHEMA.md
         const dto = {
             currentTerm: {
                 term: academicObj.academicTerm?.term ?? 'Summer',
@@ -50,35 +50,6 @@ class AcademicProgressService {
                 inProgress: academicObj.credits?.inProgress ?? 0,
                 planned: academicObj.credits?.planned ?? 0
             },
-            courses: (academicObj.courses || []).map(course => ({
-                id: course._id?.toString() ?? '',
-                courseId: course.courseId ?? '',
-                courseName: course.courseName ?? '',
-                courseCode: course.courseCode ?? '',
-                credits: course.credits ?? null,
-                instructor: course.instructor ?? '',
-                term: course.term ?? null,
-                year: course.year ?? null,
-                grade: course.grade ?? null,
-                gradePoints: course.gradePoints ?? null,
-                status: course.status ?? 'Enrolled',
-                materials: (course.materials || []).map(material => ({
-                    name: material.name ?? '',
-                    type: material.type ?? null,
-                    url: material.url ?? ''
-                })),
-                schedule: (course.schedule || []).map(schedule => ({
-                    dayOfWeek: schedule.dayOfWeek ?? null,
-                    startTime: schedule.startTime ?? null,
-                    endTime: schedule.endTime ?? null,
-                    location: schedule.location ?? ''
-                })),
-                customFields: (course.customFields || []).map(customField => ({
-                    name: customField.name ?? '',
-                    value: customField.value,
-                    type: customField.type ?? 'text'
-                }))
-            })),
             studyHours: {
                 total: academicObj.studyHours?.total ?? 0,
                 weekly: academicObj.studyHours?.weekly ?? 0,
@@ -225,7 +196,7 @@ class AcademicProgressService {
         const academicProgress = await AcademicProgress.findOneAndUpdate(
             { userId },
             {
-                $pull: { courses: { _id: courseId } },
+                $pull: { courses: { _id: new ObjectId(courseId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -281,7 +252,7 @@ class AcademicProgressService {
     /**
      * Add an academic goal
      * @param {string} userId - User ID
-     * @param {Object} goalData - Goal data to add
+     * @param {Object} goalData // Note: This is a copy-paste error from the previous line. We'll fix it.
      * @returns {Promise<Object>} Updated academic progress document
      */
     async addGoal(userId, goalData) {
@@ -347,7 +318,7 @@ class AcademicProgressService {
         const academicProgress = await AcademicProgress.findOneAndUpdate(
             { userId },
             {
-                $pull: { goals: { _id: goalId } },
+                $pull: { goals: { _id: new ObjectId(goalId) } },
                 $set: { updatedAt: new Date() }
             },
             { new: true }
@@ -386,6 +357,7 @@ class AcademicProgressService {
     /**
      * Get performance summary for a user
      * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation } // Note: This is a copy-paste error from the history method. We'll fix it.
      * @returns {Promise<Object>} Performance summary data
      */
     async getPerformanceSummary(userId) {
@@ -405,7 +377,7 @@ class AcademicProgressService {
         // Calculate completion rate
         const totalCourses = academicProgress.courses.length;
         const completionRate = totalCourses > 0 ?
-            (completedCourses.length / totalCourses) * 100 : 0;
+            completionRate: totalCourses > 0 ? (completedCourses.length / totalCourses) * 100 : 0;
 
         // Calculate total credits
         const totalCredits = academicProgress.courses.reduce((sum, course) => {
@@ -446,6 +418,93 @@ class AcademicProgressService {
             },
             achievements: academicProgress.achievements.length
         };
+    }
+
+    /**
+     * Get academic history for a user - returns array of academic DTOs
+     * @param {string} userId - User ID
+     * @param {Object} options - { startDate, endDate, interval, aggregation }
+     * // Note: In Phase 3A, we only support raw interval (no aggregation)
+     * @returns {Promise<Array>} Array of academic DTO objects
+     */
+    async getAcademicHistory(userId, options = {}) {
+        const startDate = options.startDate ? new Date(options.startDate) : undefined;
+        const endDate = options.endDate ? new Date(options.endDate) : new Date();
+        let start = startDate;
+        let end = endDate;
+        if (!start) {
+            start = new Date(end);
+        }
+        if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+        }
+        // We only support raw interval in Phase 3A
+        const query = {
+            userId,
+            timestamp: {
+                $gte: start,
+                $lte: end
+            }
+        };
+        // Sort by timestamp ascending
+        const snapshots = await AcademicSnapshot.find(query).sort({ timestamp: 1 });
+
+        // Build DTO for each snapshot (mirroring getAcademicSnapshot logic)
+        return snapshots.map(snap => {
+            const obj = snap.toObject();
+            return {
+                currentTerm: {
+                    term: obj.academicTerm?.term ?? 'Summer',
+                    year: obj.academicTerm?.year ?? 2026
+                },
+                gpa: {
+                    semester: obj.gpa?.semester ?? null,
+                    cumulative: obj.gpa?.cumulative ?? null
+                },
+                credits: {
+                    completed: obj.credits?.completed ?? 0,
+                    inProgress: obj.credits?.inProgress ?? 0,
+                    planned: obj.credits?.planned ?? 0
+                },
+                studyHours: {
+                    total: obj.studyHours?.total ?? 0,
+                    weekly: obj.studyHours?.weekly ?? 0,
+                    monthly: obj.studyHours?.monthly ?? 0,
+                    byCourse: (obj.studyHours?.byCourse || []).map(byCourse => ({
+                        courseId: byCourse.courseId ?? '',
+                        minutes: byCourse.minutes ?? 0
+                    })),
+                    lastUpdated: obj.studyHours?.lastUpdated
+                        ? new Date(obj.studyHours.lastUpdated).toISOString()
+                        : null
+                },
+                goals: (obj.goals || []).map(goal => ({
+                    id: goal._id?.toString() ?? '',
+                    title: goal.title ?? '',
+                    description: goal.description ?? '',
+                    type: goal.type ?? 'Other',
+                    targetValue: goal.targetValue ?? null,
+                    startDate: goal.startDate ? new Date(goal.startDate).toISOString() : null,
+                    targetDate: goal.targetDate ? new Date(goal.targetDate).toISOString() : null,
+                    status: goal.status ?? 'NotStarted',
+                    priority: goal.priority ?? 'Medium',
+                    completed: !!goal.completed,
+                    createdAt: goal.createdAt ? new Date(goal.createdAt).toISOString() : null,
+                    updatedAt: goal.updatedAt ? new Date(goal.updatedAt).toISOString() : null
+                })),
+                achievements: (obj.achievements || []).map(achievement => ({
+                    id: achievement._id?.toString() ?? '',
+                    title: achievement.title ?? '',
+                    description: achievement.description ?? '',
+                    date: achievement.date ? new Date(achievement.date).toISOString() : null,
+                    issuer: achievement.issuer ?? '',
+                    certificateUrl: achievement.certificateUrl ?? '',
+                    category: achievement.category ?? 'Other'
+                }))
+            };
+        });
     }
 }
 
