@@ -42,6 +42,12 @@ const config = {
         notificationsEnabled: process.env.ENABLE_NOTIFICATIONS === 'true'
     },
 
+    // Snapshot worker configuration
+    snapshot: {
+        enabled: process.env.SNAPSHOT_ENABLED === 'true',
+        interval: process.env.SNAPSHOT_INTERVAL || '0 */5 * * * *' // Every 5 minutes
+    },
+
     // CORS configuration
     cors: {
         origin: process.env.CORS_ORIGIN || '*',

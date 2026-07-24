@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const methodOverride = require('method-override');
 const apiVersionMiddleware = require('./middleware/apiVersionMiddleware');
 const errorHandler = require('./middleware/errorHandler');
+const SnapshotWorkerService = require('./services/SnapshotWorkerService');
 
 dotenv.config();
 
@@ -24,7 +25,11 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/atlas', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
-.then(() => console.log('Connected to MongoDB'))
+.then(() => {
+    console.log('Connected to MongoDB');
+    // Start snapshot worker if enabled
+    SnapshotWorkerService.start();
+})
 .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
@@ -57,9 +62,28 @@ app.use((req, res) => {
 // Error handling middleware (must be after all routes)
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`ATLAS server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+// Graceful shutdown
+const shutdown = async () => {
+    console.log('Received shutdown signal, stopping snapshot worker...');
+    await SnapshotWorkerService.stop();
+    console.log('Closing server and database connection...');
+    server.close(async (err) => {
+        if (err) {
+            console.error('Error during server shutdown:', err);
+            process.exit(1);
+        }
+        await mongoose.connection.close();
+        console.log('Process terminated');
+        process.exit(0);
+    });
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 module.exports = app;

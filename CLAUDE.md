@@ -77,6 +77,15 @@ As of July 22, 2026, the following core infrastructure has been implemented:
 - Verified integration by running the core brain test (tests/coreBrainTest.test.js) which now includes emotional state data in the context snapshot and passes.
 - All code follows existing patterns, naming conventions, and coding standards from the User, Academic, Finance, Skills, Health, Career, and Time modules.
 
+## Today's Progress (July 23, 2026) – Continued
+
+- Completed Phase 3A of the Historical Layer: added snapshot models and history methods to all domain services.
+- Created snapshot models: UserSnapshot, AcademicSnapshot, FinanceSnapshot, SkillSnapshot, HealthSnapshot, CareerSnapshot, TimeSnapshot (EmotionalState already timestamped).
+- Added history methods to each service: get<Model>History(userId, options) returning arrays of DTOs for a date range (raw interval only).
+- Updated src/core/life-context/index.js to export HistoricalContextBuilder.
+- No changes to ContextAggregator or existing snapshot methods; real‑time flows remain intact.
+- All new and modified files pass syntax checks and can be required without error.
+
 ## Current Development Phase
 
 Core data collection modules completed.
@@ -119,7 +128,7 @@ Work is currently focused on enhancing the Intelligence Layer components:
 - **Next steps:** Proceed with implementing the Time module following the same pattern.
 
 
-## Session Summary (July 24, 2026)
+## Session Summary (July 23, 2026)
 
 - **Completed:** Implemented the Emotional State module (model, service, controller, routes, validation) and integrated it into the Core Intelligence Layer via ContextAggregator.
 - **Files created/modified:**
@@ -128,3 +137,13 @@ Work is currently focused on enhancing the Intelligence Layer components:
 - **Current project state:** All eight life-domain modules (User, Academic, Finance, Skills, Health, Career, Time, Emotional State) are now connected to the Core Intelligence Layer; the foundation is complete for the Intelligence Layer to provide comprehensive insights and recommendations.
 - **Verification:** The existing core brain test (tests/coreBrainTest.test.js) passes and includes real emotional state data in the context snapshot, confirming end-to-end integration.
 - **Next steps:** Begin enhancement of Intelligence Layer components starting with the Insight Generator.
+
+## Session Summary (July 23, 2026) – Continued
+
+- **Completed:** Phase 3A of the Historical Layer: added snapshot models and history methods to all domain services.
+- **Files created/modified:**
+  - Created: src/core/life-context/HistoricalContextBuilder.js, src/models/UserSnapshot.js, src/models/AcademicSnapshot.js, src/models/FinanceSnapshot.js, src/models/SkillSnapshot.js, src/models/HealthSnapshot.js, src/models/CareerSnapshot.js, src/models/TimeSnapshot.js
+  - Modified: src/core/life-context/index.js (export HistoricalContextBuilder), src/services/UserService.js (added getUserHistory), src/services/AcademicProgressService.js (added getAcademicHistory), src/services/FinanceService.js (added getFinanceHistory), src/services/SkillService.js (added getSkillHistory), src/services/HealthService.js (added getHealthHistory), src/services/CareerService.js (added getCareerHistory), src/services/TimeService.js (getTimeHistory), src/services/EmotionalStateService.js (getEmotionalStateHistory)
+- **Current project state:** Core data collection modules are complete; the Historical Layer foundation is in place, enabling time‑series context building for the Intelligence Layer.
+- **Bugs fixed:** None.
+- **Next recommended step:** Proceed to Phase 3B – implement a background snapshot worker (cron job) to periodically populate the snapshot collections, then enhance the Analytics Processor for trend analysis.
