@@ -1,63 +1,52 @@
+// src/core/insights/InsightGenerator.js
 const TrendAnalyzer = require('../analytics/TrendAnalyzer');
 const InsightScorer = require('./InsightScorer');
-// src/core/insights/InsightGenerator.js
+const thresholds = require('./InsightThresholds');
+const comparison = require('./InsightComparison');
+
 /**
  * InsightGenerator - Interface for generating insights from multi‑module data.
+ * Now generates insights with metadata and uses configurable thresholds.
  */
 
 class InsightGenerator {
-  /**
-   * Create an InsightGenerator instance.
-   */
   constructor() {
     this.scorer = new InsightScorer();
   }
 
-  /**
-   * Generate insights based on a consolidated data snapshot.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>} Array of scored insight objects.
-   */
   generate(context, _analytics) {
     const insights = [];
 
-    insights.push(...this._generateLowSleepHighStressInsight(context, _analytics));
-    insights.push(...this._generateLowSavingsRateInsight(context, _analytics));
-    insights.push(...this._generateLowAcademicPerformanceInsight(context, _analytics));
-    insights.push(...this._generateHighExpenseRatioInsight(context, _analytics));
-    insights.push(...this._generateGoalStagnationInsights(context, _analytics));
-    insights.push(...this._generateTrendInsights(_analytics));
+    // Warning/problem insights
+    insights.push(...this._warnings(context, _analytics));
+    // Positive insights
+    insights.push(...this._positives(context, _analytics));
+    // Trend insights from analytics
+    insights.push(...this._trends(_analytics));
 
     // Score each insight to add metadata and priority scores
     return insights.map(insight => this.scorer.score(insight));
   }
 
-  /**
-   ** Generate low sleep and high stress insight.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>}
-   */
-  _generateLowSleepHighStressInsight(context, _analytics) {
+  _warnings(context, _analytics) {
     const insights = [];
 
-    // Low Sleep & High Stress
-    if (context.health.sleep?.hoursPerNight !== undefined &&
-        context.emotional_state?.stress !== undefined &&
-        context.health.sleep.hoursPerNight < 6 &&
-        context.emotional_state.stress > 80) {
+    // Low sleep, high stress
+    const sleep = context?.health?.sleep?.hoursPerNight;
+    const stress = context?.emotional_state?.stress;
+    if (sleep !== undefined && stress !== undefined &&
+        sleep < thresholds.health.sleepMinimum && stress > thresholds.health.stressHigh) {
       const daysLeft = context.goals && context.goals.find(g => g.title.toLowerCase().includes('exam'))?.targetDate
         ? Math.ceil((new Date(context.goals.find(g => g.title.toLowerCase().includes('exam')).targetDate) - new Date()) / (1000 * 60 * 60 * 24))
         : null;
-
       insights.push({
         id: this.generateId(),
         type: 'insight',
         title: 'Low sleep, high stress',
-        description: `You are sleeping only ${context.health.sleep.hoursPerNight}h/night and experiencing high stress (${context.emotional_state.stress})${context.goals && context.goals.find(g => g.title.toLowerCase().includes('exam')) ? `, with an exam in ${daysLeft} day(s)` : ''}. This combination may impair performance.`,
+        description: `You are sleeping only ${sleep}h/night and experiencing high stress (${stress})${context.goals && context.goals.find(g => g.title.toLowerCase().includes('exam')) ? `, with an exam in ${daysLeft} day(s)` : ''}. This combination may impair performance.`,
         confidence: 0.85,
         sourceModules: ['health', 'emotional_state'],
+        category: 'warning',
         basedOnMetrics: ['health.sleep.hoursPerNight', 'emotional_state.stress'],
         suggestedActions: [
           { type: 'adjust', payload: { domain: 'health', field: 'sleep.hoursPerNight', target: 7 } },
@@ -66,28 +55,17 @@ class InsightGenerator {
       });
     }
 
-    return insights;
-  }
-
-  /**
-   * Generate low savings rate insight.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>}
-   */
-  _generateLowSavingsRateInsight(context, _analytics) {
-    const insights = [];
-
     // Low savings rate
-    if (context.finance.overview?.savingsRate !== undefined &&
-        context.finance.overview.savingsRate < 0.1) {
+    const savings = context?.finance?.overview?.savingsRate;
+    if (savings !== undefined && savings < thresholds.finance.lowSavingsRate) {
       insights.push({
         id: this.generateId(),
         type: 'insight',
         title: 'Low savings rate',
-        description: `You are saving only ${(context.finance.overview.savingsRate * 100).toFixed(0)}% of your income, which is below the recommended 10%.`,
+        description: `You are saving only ${(savings * 100).toFixed(0)}% of your income, which is below the recommended 10%.`,
         confidence: 0.9,
         sourceModules: ['finance'],
+        category: 'warning',
         basedOnMetrics: ['finance.overview.savingsRate'],
         suggestedActions: [
           { type: 'review', payload: { domain: 'finance', action: 'budget' } },
@@ -96,30 +74,19 @@ class InsightGenerator {
       });
     }
 
-    return insights;
-  }
-
-  /**
-   * Generate low academic performance insight.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>}
-   */
-  _generateLowAcademicPerformanceInsight(context, _analytics) {
-    const insights = [];
-
-    // Low GPA & Low Study Hours
-    if (context.academics.gpa?.cumulative !== undefined &&
-        context.academics.studyHours?.weekly !== undefined &&
-        context.academics.gpa.cumulative < 3.0 &&
-        context.academics.studyHours.weekly < 5) {
+    // Low academic performance
+    const gpa = context?.academics?.gpa?.cumulative;
+    const study = context?.academics?.studyHours?.weekly;
+    if (gpa !== undefined && study !== undefined &&
+        gpa < thresholds.academics.minimumGPA && study < thresholds.academics.minimumWeeklyStudyHours) {
       insights.push({
         id: this.generateId(),
         type: 'insight',
         title: 'Low academic performance',
-        description: `Your GPA is ${context.academics.gpa.cumulative.toFixed(1)} and you study only ${context.academics.studyHours.weekly} hours/week, which may affect your academic progress.`,
+        description: `Your GPA is ${gpa.toFixed(1)} and you study only ${study} hours/week, which may affect your academic progress.`,
         confidence: 0.8,
         sourceModules: ['academics'],
+        category: 'warning',
         basedOnMetrics: ['academics.gpa.cumulative', 'academics.studyHours.weekly'],
         suggestedActions: [
           { type: 'schedule', payload: { activity: 'study', duration: 45 } },
@@ -128,32 +95,21 @@ class InsightGenerator {
       });
     }
 
-    return insights;
-  }
-
-  /**
-   * Generate high expense ratio insight.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>}
-   */
-  _generateHighExpenseRatioInsight(context, _analytics) {
-    const insights = [];
-
-    // High Expense Ratio
-    if (context.finance.overview?.expenses?.monthly !== undefined &&
-        context.finance.overview?.income?.monthly !== undefined &&
-        context.finance.overview.expenses.monthly > 0 &&
-        context.finance.overview.income.monthly > 0 &&
-        context.finance.overview.expenses.monthly > 0.8 * context.finance.overview.income.monthly) {
-      const expenseRatio = (context.finance.overview.expenses.monthly / context.finance.overview.income.monthly * 100).toFixed(0);
+    // High expense ratio
+    const expenses = context?.finance?.overview?.expenses?.monthly;
+    const income = context?.finance?.overview?.income?.monthly;
+    if (expenses !== undefined && income !== undefined &&
+        expenses > 0 && income > 0 &&
+        expenses > 0.8 * income) {
+      const expenseRatio = (expenses / income * 100).toFixed(0);
       insights.push({
         id: this.generateId(),
         type: 'insight',
         title: 'High expense ratio',
-        description: `Your expenses (${context.finance.overview.expenses.monthly}) represent ${expenseRatio}% of your income (${context.finance.overview.income.monthly}), which is above the recommended 80%.`,
+        description: `Your expenses (${expenses}) represent ${expenseRatio}% of your income (${income}), which is above the recommended 80%.`,
         confidence: 0.88,
         sourceModules: ['finance'],
+        category: 'warning',
         basedOnMetrics: ['finance.overview.expenses.monthly', 'finance.overview.income.monthly'],
         suggestedActions: [
           { type: 'review', payload: { domain: 'finance', action: 'expenses' } },
@@ -162,19 +118,7 @@ class InsightGenerator {
       });
     }
 
-    return insights;
-  }
-
-  /**
-   * Generate goal stagnation insights.
-   * @param {Object} context - Normalized data from all relevant modules.
-   * @param {Object} [_analytics] – output from AnalyticsProcessor.process(context).
-   * @returns {Array<Object>}
-   */
-  _generateGoalStagnationInsights(context, _analytics) {
-    const insights = [];
-
-    // Goal Stagnation
+    // Goal stagnation
     if (context.goals && Array.isArray(context.goals)) {
       const now = new Date();
       context.goals.forEach(goal => {
@@ -182,12 +126,10 @@ class InsightGenerator {
             goal.targetValue !== null &&
             goal.currentValue !== null &&
             goal.targetValue > 0) {
-
           const progress = Math.min(1, Math.max(0, goal.currentValue / goal.targetValue));
           const startedDate = goal.startDate ? new Date(goal.startDate) : null;
           const daysSinceStart = startedDate ? Math.ceil((now - startedDate) / (1000 * 60 * 60 * 24)) : 0;
-
-          if (progress < 0.1 && daysSinceStart > 30) {
+          if (progress < thresholds.goals.minimumProgressThreshold && daysSinceStart > thresholds.goals.minimumDaysForStagnation) {
             insights.push({
               id: this.generateId(),
               type: 'insight',
@@ -195,6 +137,7 @@ class InsightGenerator {
               description: `Your goal "${goal.title}" has only made ${(progress * 100).toFixed(0)}% progress in ${daysSinceStart} days. Consider reviewing your approach.`,
               confidence: 0.75,
               sourceModules: ['goals'],
+              category: 'warning',
               basedOnMetrics: ['goals.targetValue', 'goals.currentValue', 'goals.startDate'],
               suggestedActions: [
                 { type: 'review', payload: { domain: 'goals', action: 'review_goal' } },
@@ -209,81 +152,104 @@ class InsightGenerator {
     return insights;
   }
 
-  // Helper: capitalize first letter
-  _capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
-
-  // Helper: format metric name to readable string
-  _formatMetricName(metric) {
-    return this._capitalize(metric)
-      .replace(/Hours$/, 'hours')
-      .replace(/Level$/, 'level')
-      .replace(/Rate$/, 'rate')
-      .replace(/Study/, 'study');
-  }
-
-  // Helper: map a metric name to its source module.
-  _metricToModule(metric) {
-    const map = {
-      sleepHours: 'health',
-      stressLevel: 'emotionalState',
-      savingsRate: 'finance',
-      gpa: 'academics',
-      weeklyStudyHours: 'academics',
-      monthlyIncome: 'finance',
-      monthlyExpenses: 'finance',
-      netWorth: 'finance'
-    };
-    return map[metric] || 'unknown';
-  }
-
-  /**
-   * Generate insights based on trend data (if present).
-   * @param {Object} analytics - Output from AnalyticsProcessor.process.
-   * @returns {Array<Object>} Array of insight objects.
-   */
-  _generateTrendInsights(analytics) {
-    if (!analytics || !analytics.trends) {
-      return [];
-    }
+  _positives(context, _analytics) {
     const insights = [];
 
-    for (const [metricName, { slope, percentChange, direction }] of Object.entries(analytics.trends)) {
-      if (direction === 'stable' || Math.abs(percentChange) < 10) {
-        continue;
+    // Positive health: sleep improving
+    const sleep = context?.health?.sleep?.hoursPerNight;
+    const sleepTrend = _analytics && _analytics.trends && _analytics.trends.sleepHours;
+    if (sleep !== undefined && sleepTrend) {
+      const comp = comparison.compareToAverage(sleep, sleepTrend.average);
+      if (comp.direction === 'improving' && comp.percentageChange > 5) {
+        insights.push({
+          id: this.generateId(),
+          type: 'insight',
+          title: 'Sleep consistency improving',
+          description: `Your sleep pattern has improved by ${Math.abs(comp.percentageChange).toFixed(1)}% compared to your previous baseline.`,
+          confidence: Math.min(0.9, 0.5 + Math.abs(comp.percentageChange) / 100),
+          sourceModules: ['health'],
+          category: 'positive',
+          basedOnMetrics: ['health.sleep.hoursPerNight'],
+          suggestedActions: [{ type: 'review', payload: { domain: 'health', action: 'maintain_sleep_routine' } }]
+        });
       }
+    }
 
-      const title = `${this._capitalize(metricName)} ${direction}`;
-      const description = `Your ${this._formatMetricName(metricName)} has been ${direction} by ${Math.abs(percentChange).toFixed(1)}% over the analyzed period.`;
-      const confidence = Math.min(0.9, 0.5 + Math.abs(percentChange) / 200);
-      const sourceModule = this._metricToModule(metricName);
-      const suggestedActions = [{ type: 'review', payload: { domain: sourceModule, action: 'review' } }];
+    // Positive finance: savings improving
+    const savings = context?.finance?.overview?.savingsRate;
+    const savingsTrend = _analytics && _analytics.trends && _analytics.trends.savingsRate;
+    if (savings !== undefined && savingsTrend) {
+      const comp = comparison.compareToAverage(savings, savingsTrend.average);
+      if (comp.direction === 'improving' && comp.percentageChange > 5) {
+        insights.push({
+          id: this.generateId(),
+          type: 'insight',
+          title: 'Savings rate improving',
+          description: `Your savings rate has increased by ${Math.abs(comp.percentageChange).toFixed(1)}% compared to your previous average.`,
+          confidence: Math.min(0.9, 0.5 + Math.abs(comp.percentageChange) / 100),
+          sourceModules: ['finance'],
+          category: 'positive',
+          basedOnMetrics: ['finance.overview.savingsRate'],
+          suggestedActions: [{ type: 'review', payload: { domain: 'finance', action: 'maintain_savings_habits' } }]
+        });
+      }
+    }
 
-      // Ensure confidence is a number with up to 2 decimal places
-      const conf = Number(Number(confidence).toFixed(2));
-      insights.push({
-        id: this.generateId(),
-        type: 'insight',
-        title,
-        description,
-        confidence: conf,
-        sourceModules: [sourceModule],
-        basedOnMetrics: [metricName],
-        suggestedActions
+    // Positive goal: milestones
+    if (context.goals && Array.isArray(context.goals)) {
+      context.goals.forEach(goal => {
+        if (goal.status === 'InProgress' &&
+            goal.targetValue !== null &&
+            goal.currentValue !== null &&
+            goal.targetValue > 0) {
+          const progress = goal.currentValue / goal.targetValue;
+          if ([0.25, 0.5, 0.75, 1].some(p => Math.abs(progress - p) < 0.01)) {
+            insights.push({
+              id: this.generateId(),
+              type: 'insight',
+              title: `Goal milestone: ${Math.round(progress * 100)}% ${goal.title}`,
+              description: `You've reached ${Math.round(progress * 100)}% of your goal "${goal.title}".`,
+              confidence: 0.9,
+              sourceModules: ['goals'],
+              category: 'milestone',
+              basedOnMetrics: ['goals.currentValue', 'goals.targetValue'],
+              suggestedActions: [{ type: 'review', payload: { domain: 'goals', action: 'celebrate_milestone' } }]
+            });
+          }
+        }
       });
     }
 
     return insights;
   }
 
-  /**
-   * Generate a simple ID for insights
-   * @returns {string} A simple ID
-   */
-  generateId() {
-    return Math.random().toString(36).substr(2, 9);
+  _trends(_analytics) {
+    const insights = [];
+    if (!_analytics || !_analytics.trends) return insights;
+    for (const [metric, data] of Object.entries(_analytics.trends)) {
+      if (data.direction === 'stable' || Math.abs(data.percentChange) < 10) continue;
+      insights.push({
+        id: this.generateId(),
+        type: 'insight',
+        title: `${this._capitalize(metric)} ${data.direction}`,
+        description: `Your ${this._formatMetricName(metric)} has been ${data.direction} by ${Math.abs(data.percentChange).toFixed(1)}% over the analyzed period.`,
+        confidence: Math.min(0.9, 0.5 + Math.abs(data.percentChange) / 200),
+        sourceModules: [this._metricToModule(metric)],
+        category: 'trend',
+        basedOnMetrics: [metric],
+        suggestedActions: [{ type: 'review', payload: { domain: this._metricToModule(metric), action: 'review' } }]
+      });
+    }
+    return insights;
   }
+
+  _capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
+  _formatMetricName(m) { return this._capitalize(m).replace(/Hours$/,'hours').replace(/Level$/,'level').replace(/Rate$/,'rate').replace(/Study/,'study'); }
+  _metricToModule(m) {
+    const map = { sleepHours:'health', stressLevel:'emotionalState', savingsRate:'finance', gpa:'academics', weeklyStudyHours:'academics', monthlyIncome:'finance', monthlyExpenses:'finance', netWorth:'finance' };
+    return map[m] || 'unknown';
+  }
+  generateId() { return Math.random().toString(36).substr(2,9); }
 }
 
 module.exports = InsightGenerator;
