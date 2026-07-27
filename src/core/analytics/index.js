@@ -2,7 +2,9 @@
 // Analytics module - public interface
 
 const AnalyticsProcessor = require('./AnalyticsProcessor');
+const CorrelationAnalyzer = require('./CorrelationAnalyzer');
 
 module.exports = {
-  AnalyticsProcessor
+  AnalyticsProcessor,
+  CorrelationAnalyzer
 };

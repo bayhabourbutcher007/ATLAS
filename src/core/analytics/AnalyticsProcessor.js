@@ -146,6 +146,36 @@ class AnalyticsProcessor {
     return analytics;
   }
 
+  }
+
+  /**
+   * Get the metric definitions used for trend and correlation analysis.
+   * @returns {Array} Array of metric definition objects.
+   * @private
+   * @static
+   */
+  static _getMetricDefinitions() {
+    return [
+      { name: 'sleepHours', path: [sleep', 'hoursPerNight'], arrayKey: 'health' },
+      { name: 'stressLevel', path: [stress'], arrayKey: 'emotional_state' },
+      { name: 'savingsRate', path: [overview', 'savingsRate'], arrayKey: 'finance' },
+      { name: 'gpa', path: null, arrayKey: 'academics', customExtractor: (acad) => {
+          if (!acad || !acad.gpa) return undefined;
+          if (acad.gpa.cumulative !== null && acad.gpa.cumulative !== undefined) {
+            return acad.gpa.cumulative;
+          }
+          if (acad.gpa.semester !== null && acad.gpa.semester !== undefined) {
+            return acad.gpa.semester;
+          }
+          return undefined;
+        } },
+      { name: 'weeklyStudyHours', path: [studyHours', 'weekly'], arrayKey: 'academics' },
+      { name: 'monthlyIncome', path: [overview', 'income', 'monthly'], arrayKey: 'finance' },
+      { name: 'monthlyExpenses', path: [overview', 'expenses', 'monthly'], arrayKey: 'finance' },
+      { name: 'netWorth', path: [overview', 'netWorth'], arrayKey: 'finance' }
+    ];
+  }
+
   /**
    * Compute trend metrics for a user over a historical range.
    * @param {string|ObjectId} userId - The user's ID.
@@ -208,21 +238,8 @@ class AnalyticsProcessor {
         return typeof current === 'number' && !isNaN(current) ? current : undefined;
       };
 
-      // Define the metrics we want to analyze and their paths in the historical snapshot objects
-      const metricDefinitions = [
-        { name: 'sleepHours', path: ['sleep', 'hoursPerNight'], arrayKey: 'health' },
-        { name: 'stressLevel', path: ['stress'], arrayKey: 'emotional_state' },
-        { name: 'savingsRate', path: ['overview', 'savingsRate'], arrayKey: 'finance' },
-        { name: 'gpa', path: null, arrayKey: 'academics', customExtractor: (acad) => {
-            if (!acad || !acad.gpa) return undefined;
-            if (acad.gpa.cumulative !== null && acad.gpa.cumulative !== undefined) {
-              return acad.gpa.cumulative;
-            }
-            if (acad.gpa.semester !== null && acad.gpa.semester !== undefined) {
-              return acad.gpa.semester;
-            }
-            return undefined;
-          } },
+      // Get metric definitions
+      const metricDefinitions = AnalyticsProcessor._getMetricDefinitions();
         { name: 'weeklyStudyHours', path: ['studyHours', 'weekly'], arrayKey: 'academics' },
         { name: 'monthlyIncome', path: ['overview', 'income', 'monthly'], arrayKey: 'finance' },
         { name: 'monthlyExpenses', path: ['overview', 'expenses', 'monthly'], arrayKey: 'finance' },
@@ -253,6 +270,7 @@ class AnalyticsProcessor {
         const regression = TrendAnalyzer.linearRegression(values);
         const percentChange = TrendAnalyzer.percentChange(values);
         const direction = TrendAnalyzer.direction(regression.slope);
+        const average = values.reduce((sum, val) => sum + val, 0) / values.length;
 
         trends[def.name] = {
           slope: regression.slope,
@@ -264,7 +282,19 @@ class AnalyticsProcessor {
         };
       }
 
-      return Object.keys(trends).length > 0 ? trends : null;
+      // Compute correlations between metrics
+      const correlations = CorrelationAnalyzer.analyze(historicalContext, metricDefinitions);
+
+      // Return both trends and correlations
+      const result = {};
+      if (Object.keys(trends).length > 0) {
+        result.trends = trends;
+      }
+      if (Object.keys(correlations).length > 0) {
+        result.correlations = correlations;
+      }
+
+      return Object.keys(result).length > 0 ? result : null;
     } catch (error) {
       // Log error but don't break the flow
       console.error('Error computing trend metrics:', error);
